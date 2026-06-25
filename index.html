@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tech Lab Inventory Manager</title>
+    <link rel="icon" type="image/png" href="icon.png">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #1f050e 0%, #0b0104 100%);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-bg-hover: rgba(255, 255, 255, 0.06);
+            --glass-border: rgba(255, 255, 255, 0.07);
+            --glass-border-focus: rgba(223, 177, 91, 0.4);
+            --text-main: #f5f0f2;
+            --text-muted: #a69297;
+            --accent-color: #dfb15b;
+            --accent-hover: #f5cb6c;
+            --success: #10b981;
+            --success-bg: rgba(16, 185, 129, 0.12);
+            --pending: #f59e0b;
+            --pending-bg: rgba(245, 158, 11, 0.12);
+            --repair: #f97316;
+            --repair-bg: rgba(249, 115, 22, 0.15);
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.12);
+            --maroon-dark: #140207;
+            --card-radius: 16px;
+            --input-radius: 10px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent; 
+            -webkit-overflow-scrolling: touch;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        .app-header-bar {
+            background: rgba(20, 2, 7, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 1.25rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #ffffff, var(--accent-hover));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .sync-status-badge {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.35rem 0.75rem;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+        }
+
+        .sync-status-badge.syncing {
+            color: var(--pending);
+            border-color: rgba(245, 158, 11, 0.3);
+            animation: pulse 1.5s infinite;
+        }
+
+        .sync-status-badge.synced {
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .lab-bar {
+            background: rgba(255, 255, 255, 0.01);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 0.75rem 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .lab-list {
+            list-style: none;
+            display: flex;
+            flex-direction: row;
+            overflow-x: auto;
+            gap: 0.75rem;
+            padding: 0 2rem;
+            scroll-behavior: smooth;
+            flex: 1;
+        }
+
+        .lab-list::-webkit-scrollbar {
+            display: none;
+        }
+
+        .lab-item {
+            padding: 0.6rem 1.25rem;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.88rem;
+            white-space: nowrap;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            user-select: none;
+        }
+
+        .lab-item:hover {
+            color: var(--text-main);
+            background: var(--glass-bg-hover);
+        }
+
+        .lab-item.active {
+            background: rgba(223, 177, 91, 0.15);
+            color: var(--accent-color);
+            border-color: rgba(223, 177, 91, 0.4);
+            font-weight: 600;
+        }
+
+        .lab-management-btns {
+            display: flex;
+            gap: 0.4rem;
+            padding: 0 2rem;
+        }
+
+        .cupboard-control-panel {
+            padding: 0.5rem 2rem;
+            background: rgba(0, 0, 0, 0.15);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .cupboard-select-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cupboard-btn-group {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .btn-mini {
+            padding: 0.45rem 0.85rem;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            font-weight: 600;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-mini:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .btn-mini.btn-mini-danger {
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-mini.btn-mini-danger:hover {
+            background: var(--danger-bg);
+            border-color: var(--danger);
+            color: white;
+        }
+
+        .main-content {
+            flex: 1;
+            width: 100%;
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .view-header {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 992px) {
+            .view-header {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+        }
+
+        .lab-title-section h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .lab-title-section p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .header-actions {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        @media (min-width: 576px) {
+            .header-actions {
+                flex-direction: row;
+                align-items: center;
+            }
+        }
+
+        @media (min-width: 992px) {
+            .header-actions {
+                width: auto;
+                max-width: 850px;
+            }
+        }
+
+        .search-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .search-input {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: var(--input-radius);
+            font-size: 0.95rem;
+            outline: none;
+            width: 100%;
+            transition: all 0.25s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-color);
+            background: rgba(255, 255, 255, 0.07);
+            box-shadow: 0 0 0 3px rgba(223, 177, 91, 0.1);
+        }
+
+        .action-buttons-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            height: 44px; 
+            padding: 0 1.25rem;
+            border: none;
+            border-radius: var(--input-radius);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: var(--maroon-dark);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-scan {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--accent-color);
+        }
+
+        .btn-scan:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--accent-color);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        .btn-danger:hover {
+            background: var(--danger-bg);
+            border-color: var(--danger);
+            color: white;
+        }
+
+        .btn:active {
+            transform: scale(0.98) translateY(0);
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--card-radius);
+            padding: 0.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 0.5rem;
+            text-align: left;
+        }
+
+        th {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        tbody tr {
+            background: rgba(255, 255, 255, 0.01);
+            transition: all 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background: var(--glass-bg-hover);
+        }
+
+        td {
+            padding: 1rem 1.25rem;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            vertical-align: middle;
+        }
+
+        .item-code-cell {
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+
+        .table-input {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--glass-border-focus);
+            color: #fff;
+            padding: 0.5rem 0.6rem;
+            border-radius: 6px;
+            width: 100%;
+            font-size: 0.9rem;
+        }
+
+        .qty-badge-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .qty-sub-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        .badge.available {
+            background: var(--success-bg);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .badge.borrowed {
+            background: var(--pending-bg);
+            color: var(--pending);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .badge.needrepair {
+            background: var(--repair-bg);
+            color: var(--repair);
+            border: 1px solid rgba(249, 115, 22, 0.2);
+        }
+
+        .actions-cell-wrapper {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .action-table-btn {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 0.5rem 0.95rem; 
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-table-btn:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .action-table-btn.save-row-btn {
+            border-color: var(--success);
+            color: var(--success);
+        }
+        .action-table-btn.save-row-btn:hover {
+            background: var(--success-bg);
+            color: #fff;
+        }
+
+        .action-table-btn.delete-btn {
+            border-color: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .action-table-btn.delete-btn:hover {
+            background: var(--danger-bg);
+            border-color: var(--danger);
+            color: white;
+        }
+
+        .no-data {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 4rem 2rem !important;
+            font-style: italic;
+            background: transparent;
+        }
+
+        @media (max-width: 991px) {
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+
+            thead {
+                display: none;
+            }
+
+            .card {
+                background: transparent;
+                border: none;
+                box-shadow: none;
+                padding: 0;
+            }
+
+            #inventory-table-body tr {
+                background: rgba(255, 255, 255, 0.02);
+                border: 1px solid var(--glass-border);
+                border-radius: var(--card-radius);
+                padding: 1.25rem;
+                margin-bottom: 1rem;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+
+            #inventory-table-body td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.75rem 0; 
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                font-size: 0.92rem;
+            }
+
+            #inventory-table-body td:last-of-type {
+                border-bottom: none;
+                padding-top: 1.25rem;
+                justify-content: stretch;
+            }
+
+            #inventory-table-body td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                font-size: 0.72rem;
+                letter-spacing: 0.5px;
+            }
+
+            .actions-cell-wrapper {
+                width: 100%;
+                flex-direction: column;
+                gap: 0.6rem;
+            }
+
+            .action-table-btn {
+                width: 100%;
+                height: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.9rem;
+            }
+            
+            .no-data {
+                background: rgba(255, 255, 255, 0.02) !important;
+                border: 1px solid var(--glass-border) !important;
+                border-radius: var(--card-radius);
+            }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: var(--maroon-dark);
+            border: 1px solid var(--glass-border);
+            width: 100%;
+            max-width: 650px;
+            border-radius: var(--card-radius);
+            padding: 1.75rem;
+            transform: scale(0.95);
+            transition: transform 0.25s cubic-bezier(0.1, 0.76, 0.55, 0.94);
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .modal-overlay.active .modal {
+            transform: scale(1);
+        }
+
+        @media (max-width: 576px) {
+            .modal-overlay {
+                align-items: flex-end;
+                padding: 0;
+            }
+            .modal {
+                border-radius: 24px 24px 0 0;
+                transform: translateY(100%);
+                max-height: 92vh;
+            }
+            .modal-overlay.active .modal {
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 0.75rem;
+        }
+
+        .close-btn {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 1.4rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .close-btn:hover {
+            color: var(--text-main);
+            border-color: var(--text-muted);
+        }
+
+        .modal-grid-split {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 576px) {
+            .form-row-inner {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 0.85rem 1rem; 
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--input-radius);
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent-color);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 0 3px rgba(223, 177, 91, 0.08);
+        }
+
+        select option {
+            background: #1a030a;
+            color: white;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+            border-top: 1px solid var(--glass-border);
+            padding-top: 1.25rem;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+        }
+
+        .btn-secondary:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--text-muted);
+        }
+
+        @media (max-width: 576px) {
+            .form-actions {
+                flex-direction: column-reverse;
+            }
+            .form-actions .btn {
+                width: 100%;
+                height: 48px;
+            }
+        }
+
+        .bulk-import-container {
+            background: rgba(223, 177, 91, 0.02);
+            border: 1.5px dashed rgba(223, 177, 91, 0.2);
+            border-radius: var(--input-radius);
+            padding: 1.25rem;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .bulk-import-container:hover {
+            background: rgba(223, 177, 91, 0.04);
+            border-color: rgba(223, 177, 91, 0.4);
+        }
+
+        .file-input-label {
+            display: inline-block;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 0.6rem 1.25rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent-color);
+            margin-top: 0.75rem;
+            text-transform: none;
+            letter-spacing: 0;
+            transition: all 0.2s ease;
+        }
+
+        .file-input-label:hover {
+            background: rgba(223, 177, 91, 0.1);
+            border-color: var(--accent-color);
+        }
+
+        .divider-container {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 1.5rem 0;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .divider-container::before, .divider-container::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .divider-container:not(:empty)::before { margin-right: 1rem; }
+        .divider-container:not(:empty)::after { margin-left: 1rem; }
+
+        #qr-reader {
+            width: 100%;
+            border: none !important;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--card-radius);
+            overflow: hidden;
+        }
+        #qr-reader button {
+            background: var(--accent-color) !important;
+            color: var(--maroon-dark) !important;
+            border: none !important;
+            padding: 0.6rem 1.25rem !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+            cursor: pointer;
+            margin: 10px auto;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-header-bar">
+        <div class="brand">
+            <h2>TechLab Inventory</h2>
+        </div>
+        <div class="sync-status-badge" id="syncBadge">Initializing...</div>
+    </div>
+
+    <div class="lab-bar">
+        <ul class="lab-list" id="labListContainer"></ul>
+        <div class="lab-management-btns">
+            <button class="btn-mini" onclick="addNewLab()">+ Add Lab</button>
+            <button class="btn-mini btn-mini-danger" onclick="removeCurrentLab()">- Delete Lab</button>
+        </div>
+    </div>
+
+    <div class="cupboard-control-panel">
+        <div class="cupboard-select-wrapper">
+            <label for="cupboardFilterSelect" style="margin-bottom: 0; font-size: 0.8rem;">Select Cupboard:</label>
+            <select id="cupboardFilterSelect" style="width: auto; padding: 0.4rem 1rem; height: 34px; font-size: 0.85rem;" onchange="handleCupboardFilterChange()"></select>
+        </div>
+        <div class="cupboard-btn-group">
+            <button class="btn-mini" onclick="addNewCupboard()">+ Add Cupboard</button>
+            <button class="btn-mini btn-mini-danger" onclick="removeCurrentCupboard()">- Delete Selected Cupboard</button>
+        </div>
+    </div>
+
+    <main class="main-content">
+        <div class="view-header">
+            <div class="lab-title-section">
+                <h1 id="current-lab-title">Loading Ecosystem...</h1>
+                <p>Track assets in real-time. Changes sync instantly to Google Sheets. Double-click/Tap-hold a lab tab to rename it.</p>
+            </div>
+
+            <div class="header-actions">
+                <div class="search-wrapper">
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search item code or asset name..." oninput="renderTable()">
+                </div>
+                <div class="action-buttons-row">
+                    <button class="btn btn-scan" onclick="openScannerModal()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        Scan QR
+                    </button>
+                    <button class="btn btn-danger" onclick="clearAllLabRecords()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        Clear All
+                    </button>
+                    <button class="btn btn-primary" onclick="openModal()">+ Add Entry</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item Code</th>
+                            <th>Item Name</th>
+                            <th>Cupboard Location</th>
+                            <th>Stock Allocation</th>
+                            <th>Borrower / Log Context</th>
+                            <th>Date Logged</th>
+                            <th>Status</th>
+                            <th>Receive Date</th>
+                            <th style="text-align: center; min-width: 260px;">Actions Management</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">Log Asset Movement</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+
+            <div class="modal-grid-split">
+                <div class="bulk-import-container">
+                    <p style="font-size: 0.9rem; color: var(--text-main); font-weight: 600;">Bulk Import via Sheet Document</p>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem;">Supports Excel worksheets (.xlsx, .xls) and standard CSV parsing</p>
+                    <label for="excelFileInput" class="file-input-label">Choose Spreadsheet File</label>
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleBulkImport(this)">
+                </div>
+
+                <div class="divider-container">Or Manual Transaction Entry</div>
+
+                <form id="inventoryForm" onsubmit="handleSubmit(event)">
+                    <div class="form-row-inner">
+                        <div class="form-group">
+                            <label for="itemCode">Item Code</label>
+                            <input type="text" id="itemCode" placeholder="e.g. COMP-042" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="itemCupboard">Assign Cupboard Location</label>
+                            <select id="itemCupboard" required></select>
+                        </div>
+                    </div>
+
+                    <div class="form-row-inner">
+                        <div class="form-group">
+                            <label for="itemName">Item Name Reference</label>
+                            <input type="text" id="itemName" placeholder="e.g. Arduino Uno development kit" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="qtyAvailable">Available Qty (In Stock Pool)</label>
+                            <input type="number" id="qtyAvailable" min="0" placeholder="10" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row-inner">
+                        <div class="form-group">
+                            <label for="borrowName">Log Notes / Allocation Group</label>
+                            <input type="text" id="borrowName" placeholder="e.g. John Doe / Repaired component batch">
+                        </div>
+                        <div class="form-group">
+                            <label for="qtyBorrowed">Active Action Qty Request</label>
+                            <input type="number" id="qtyBorrowed" min="0" placeholder="0" value="0" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row-inner">
+                        <div class="form-group">
+                            <label for="borrowDate">Date Logged</label>
+                            <input type="date" id="borrowDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="receiveStatus">Transaction Initial Status</label>
+                            <select id="receiveStatus" onchange="toggleReceiveDate()">
+                                <option value="Available" selected>Available (In Stock)</option>
+                                <option value="Borrowed">Borrowed (Pending log)</option>
+                                <option value="Need Repair">Need Repair</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="receiveDateGroup" style="display: none;">
+                        <label for="receiveDate">Receive Date Log</label>
+                        <input type="date" id="receiveDate">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel Layout</button>
+                        <button type="submit" class="btn btn-primary">Save Entry Log</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="scannerModalOverlay">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 style="font-size: 1.2rem; font-weight: 700;">Scan Asset QR Code</h3>
+                <button class="close-btn" onclick="closeScannerModal()">&times;</button>
+            </div>
+            <div style="margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+                Align the tracking tags or asset codes inside the viewfinder.
+            </div>
+            
+            <div id="qr-reader"></div>
+
+            <div style="margin-top: 1rem;">
+                <label for="manualQRFallbackInput" style="font-size:0.75rem;">Manual Tag Lookup Fallback</label>
+                <div style="display:flex; gap: 0.5rem;">
+                    <input type="text" id="manualQRFallbackInput" placeholder="Enter scanned tag string text directly...">
+                    <button type="button" class="btn btn-primary" style="height:42px;" onclick="executeManualQRAction()">Go</button>
+                </div>
+            </div>
+            
+            <div class="form-actions" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--glass-border);">
+                <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="closeScannerModal()">Disconnect Capture Pipeline</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION: PASTE YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL HERE
+        // ==========================================
+        const CLOUD_SYNC_URL = "https://script.google.com/macros/s/AKfycbzbZplJE9UE-m3MQNdMXET7RWuJBKXT3dA5THFvRtKV-CMQw3xcipq8wXcxvKp_jKTa/exec";
+
+        let currentLab = 1;
+        let editingRowIndex = null; 
+
+        // Fallbacks if connection breaks initially
+        let labNames = { 1: "Electronic Lab" };
+        let inventoryData = {};
+        let cupboardSetup = {};
+
+        let html5QrcodeScanner = null;
+
+        function updateSyncBadge(status, message = "") {
+            const badge = document.getElementById("syncBadge");
+            badge.className = "sync-status-badge " + status;
+            if (status === "syncing") {
+                badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; background:var(--pending); border-radius:50%"></span> Syncing Matrix...`;
+            } else if (status === "synced") {
+                badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; background:var(--success); border-radius:50%"></span> Cloud Synced`;
+            } else if (status === "error") {
+                badge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; background:var(--danger); border-radius:50%"></span> Offline Mode`;
+                console.error(message);
+            }
+        }
+
+        // Fetch data from Google Sheet
+        async function fetchDatabaseFromCloud() {
+            if (CLOUD_SYNC_URL.includes("PASTE_YOUR_WEB_APP_URL_HERE")) {
+                updateSyncBadge("error", "Web App URL not configured yet.");
+                alert("Please add your Google Apps Script Web App URL to line 475 of this code file.");
+                return;
+            }
+            try {
+                updateSyncBadge("syncing");
+                const res = await fetch(CLOUD_SYNC_URL);
+                const cloudData = await res.json();
+                
+                labNames = cloudData.labNames || labNames;
+                inventoryData = cloudData.inventoryData || inventoryData;
+                cupboardSetup = cloudData.cupboardSetup || cupboardSetup;
+                
+                // Keep local storage as an emergency offline backup cache
+                localStorage.setItem('labNamesData', JSON.stringify(labNames));
+                localStorage.setItem('labInventoryData', JSON.stringify(inventoryData));
+                localStorage.setItem('labCupboardSetup', JSON.stringify(cupboardSetup));
+
+                updateSyncBadge("synced");
+                if(!labNames[currentLab]) {
+                    currentLab = parseInt(Object.keys(labNames)[0], 10);
+                }
+                
+                refreshUI();
+            } catch (err) {
+                updateSyncBadge("error", err);
+                // Load cached dataset on connection failure
+                labNames = JSON.parse(localStorage.getItem('labNamesData')) || labNames;
+                inventoryData = JSON.parse(localStorage.getItem('labInventoryData')) || inventoryData;
+                cupboardSetup = JSON.parse(localStorage.getItem('labCupboardSetup')) || cupboardSetup;
+                refreshUI();
+            }
+        }
+
+        // Push data changes to Google Sheet
+        async function pushDatabaseToCloud() {
+            if (CLOUD_SYNC_URL.includes("PASTE_YOUR_WEB_APP_URL_HERE")) return;
+            try {
+                updateSyncBadge("syncing");
+                
+                const dataPayload = {
+                    labNames: labNames,
+                    inventoryData: inventoryData,
+                    cupboardSetup: cupboardSetup
+                };
+
+                // Sync locally first
+                localStorage.setItem('labNamesData', JSON.stringify(labNames));
+                localStorage.setItem('labInventoryData', JSON.stringify(inventoryData));
+                localStorage.setItem('labCupboardSetup', JSON.stringify(cupboardSetup));
+
+                const res = await fetch(CLOUD_SYNC_URL, {
+                    method: "POST",
+                    mode: "no-cors", // Google App Web Apps receive redirects via cross-origin posts safely with no-cors
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(dataPayload)
+                });
+                
+                updateSyncBadge("synced");
+            } catch (err) {
+                updateSyncBadge("error", err);
+            }
+        }
+
+        function refreshUI() {
+            renderLabTabs();
+            updateCupboardDropdowns();
+            if (labNames[currentLab]) {
+                document.getElementById('current-lab-title').innerText = labNames[currentLab];
+            }
+            renderTable();
+        }
+
+        function renderLabTabs() {
+            const container = document.getElementById('labListContainer');
+            container.innerHTML = '';
+            
+            Object.keys(labNames).forEach(id => {
+                const labId = parseInt(id, 10);
+                const li = document.createElement('li');
+                li.className = `lab-item ${currentLab === labId ? 'active' : ''}`;
+                li.innerText = labNames[labId];
+                li.onclick = () => switchLab(labId);
+                li.ondblclick = () => editLabName(labId);
+                
+                let holdTimer;
+                li.addEventListener('touchstart', () => { holdTimer = setTimeout(() => editLabName(labId), 800); });
+                li.addEventListener('touchend', () => clearTimeout(holdTimer));
+                
+                container.appendChild(li);
+            });
+        }
+
+        function addNewLab() {
+            const ids = Object.keys(labNames).map(Number);
+            const nextId = ids.length > 0 ? Math.max(...ids) + 1 : 1;
+            const nameProposal = prompt("Specify dynamic label for the New Lab Matrix:", `Lab Ecosystem ${nextId}`);
+            
+            if (nameProposal === null) return;
+            const cleanName = nameProposal.trim();
+            if (!cleanName) return;
+
+            labNames[nextId] = cleanName;
+            inventoryData[nextId] = [];
+            cupboardSetup[nextId] = ["Cupboard 1"];
+
+            currentLab = nextId;
+            editingRowIndex = null;
+            
+            refreshUI();
+            pushDatabaseToCloud();
+        }
+
+        function removeCurrentLab() {
+            const name = labNames[currentLab];
+            if (Object.keys(labNames).length <= 1) {
+                alert("System security fallback structure requirement: At least one baseline tracking lab matrix must exist.");
+                return;
+            }
+
+            if (confirm(`Are you completely sure you want to delete "${name}"? This will permanently wipe all components nested inside!`)) {
+                delete labNames[currentLab];
+                delete inventoryData[currentLab];
+                delete cupboardSetup[currentLab];
+
+                currentLab = parseInt(Object.keys(labNames)[0], 10);
+                editingRowIndex = null;
+
+                refreshUI();
+                pushDatabaseToCloud();
+            }
+        }
+
+        function editLabName(labId) {
+            const oldName = labNames[labId];
+            const nameProposal = prompt(`Modify identity tracking label parameter for "${oldName}":`, oldName);
+            if (nameProposal === null) return;
+            const cleanName = nameProposal.trim();
+            if (!cleanName) return;
+
+            labNames[labId] = cleanName;
+            renderLabTabs();
+            if (currentLab === labId) {
+                document.getElementById('current-lab-title').innerText = cleanName;
+            }
+            pushDatabaseToCloud();
+        }
+
+        function updateCupboardDropdowns() {
+            const filterSelect = document.getElementById('cupboardFilterSelect');
+            const formSelect = document.getElementById('itemCupboard');
+            const list = cupboardSetup[currentLab] || [];
+            
+            filterSelect.innerHTML = '<option value="ALL">-- Show All Cupboards --</option>';
+            list.forEach(cup => {
+                filterSelect.innerHTML += `<option value="${cup}">${cup}</option>`;
+            });
+
+            formSelect.innerHTML = '';
+            list.forEach(cup => {
+                formSelect.innerHTML += `<option value="${cup}">${cup}</option>`;
+            });
+        }
+
+        function handleCupboardFilterChange() {
+            renderTable();
+        }
+
+        function addNewCupboard() {
+            const list = cupboardSetup[currentLab] || [];
+            const nextIndex = list.length + 1;
+            const nameProposal = prompt("Specify registration identity context code for New Location Node:", `Cupboard ${nextIndex}`);
+            
+            if (nameProposal === null) return;
+            const cleanName = nameProposal.trim();
+            if (!cleanName) return;
+            if (list.includes(cleanName)) return;
+
+            if(!cupboardSetup[currentLab]) cupboardSetup[currentLab] = [];
+            cupboardSetup[currentLab].push(cleanName);
+            
+            updateCupboardDropdowns();
+            document.getElementById('cupboardFilterSelect').value = cleanName;
+            renderTable();
+            pushDatabaseToCloud();
+        }
+
+        function removeCurrentCupboard() {
+            const activeSelection = document.getElementById('cupboardFilterSelect').value;
+            if (activeSelection === 'ALL') {
+                alert("Select a valid single structural cupboard filter option layout target first.");
+                return;
+            }
+
+            if (confirm(`Delete "${activeSelection}" location assignment parameter? Safe fallback allocation will run on elements inside.`)) {
+                inventoryData[currentLab].forEach(item => {
+                    if (item.cupboard === activeSelection) {
+                        item.cupboard = cupboardSetup[currentLab][0] || 'Unassigned';
+                    }
+                });
+                
+                cupboardSetup[currentLab] = cupboardSetup[currentLab].filter(c => c !== activeSelection);
+                
+                updateCupboardDropdowns();
+                renderTable();
+                pushDatabaseToCloud();
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('inventory-table-body');
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+            const cupboardFilter = document.getElementById('cupboardFilterSelect').value;
+            let items = inventoryData[currentLab] || [];
+             
+            tbody.innerHTML = '';
+
+            if (cupboardFilter !== 'ALL') {
+                items = items.filter(item => (item.cupboard || "Cupboard 1") === cupboardFilter);
+            }
+
+            if (searchQuery !== '') {
+                items = items.filter(item => 
+                    item.itemCode.toLowerCase().includes(searchQuery) || 
+                    item.itemName.toLowerCase().includes(searchQuery)
+                );
+            }
+
+            if (items.length === 0) {
+                const message = (inventoryData[currentLab] || []).length === 0 
+                    ? "No data logged in this database partition yet." 
+                    : "No matching record targets resolved parsing current query filters.";
+                
+                const colSpanCount = window.innerWidth > 991 ? 9 : 1;
+                tbody.innerHTML = `<tr><td colspan="${colSpanCount}" class="no-data">${message}</td></tr>`;
+                return;
+            }
+
+            const originalItemsList = inventoryData[currentLab];
+
+            items.forEach((item) => {
+                const trueIndex = originalItemsList.indexOf(item);
+                const isEditing = (editingRowIndex === trueIndex);
+                
+                let normalizedStatus = (item.receiveStatus || 'Available').toLowerCase().replace(/\s+/g, '');
+                const statusClass = ['available', 'borrowed', 'needrepair'].includes(normalizedStatus) ? normalizedStatus : 'available';
+                
+                const receiveDateDisplay = item.receiveDate ? item.receiveDate : '-';
+                const itemCupboardText = item.cupboard || 'Cupboard 1';
+                
+                const tr = document.createElement('tr');
+                
+                if (isEditing) {
+                    let selectOptionsHtml = '';
+                    (cupboardSetup[currentLab] || ["Cupboard 1"]).forEach(cup => {
+                        selectOptionsHtml += `<option value="${cup}" ${itemCupboardText === cup ? 'selected' : ''}>${cup}</option>`;
+                    });
+
+                    tr.innerHTML = `
+                        <td data-label="Item Code"><input type="text" id="edit_code_${trueIndex}" class="table-input" value="${item.itemCode}"></td>
+                        <td data-label="Item Name"><input type="text" id="edit_name_${trueIndex}" class="table-input" value="${item.itemName}"></td>
+                        <td data-label="Cupboard Location">
+                            <select id="edit_cupboard_${trueIndex}" class="table-input">${selectOptionsHtml}</select>
+                        </td>
+                        <td data-label="Stock Allocation">
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <input type="number" id="edit_avail_${trueIndex}" class="table-input" style="width:100%" value="${item.qtyAvailable || 0}">
+                                <input type="number" id="edit_borrowed_${trueIndex}" class="table-input" style="width:100%" value="${item.qtyBorrowed || 0}">
+                            </div>
+                        </td>
+                        <td data-label="Borrower Name"><input type="text" id="edit_bname_${trueIndex}" class="table-input" value="${item.borrowName || ''}"></td>
+                        <td data-label="Borrow Date"><input type="date" id="edit_bdate_${trueIndex}" class="table-input" value="${item.borrowDate}"></td>
+                        <td data-label="Status">
+                            <select id="edit_status_${trueIndex}" class="table-input" onchange="handleInlineStatusChange(${trueIndex}, this.value)">
+                                <option value="Available" ${item.receiveStatus === 'Available' ? 'selected' : ''}>Available</option>
+                                <option value="Borrowed" ${item.receiveStatus === 'Borrowed' ? 'selected' : ''}>Borrowed</option>
+                                <option value="Need Repair" ${item.receiveStatus === 'Need Repair' ? 'selected' : ''}>Need Repair</option>
+                            </select>
+                        </td>
+                        <td data-label="Receive Date"><input type="date" id="edit_rdate_${trueIndex}" class="table-input" value="${item.receiveDate || ''}" ${item.receiveStatus !== 'Available' ? 'disabled': ''}></td>
+                        <td>
+                            <div class="actions-cell-wrapper">
+                                <button class="action-table-btn save-row-btn" onclick="saveInlineRow(${trueIndex})">Save</button>
+                                <button class="action-table-btn" onclick="cancelInlineRow()">Cancel</button>
+                            </div>
+                        </td>
+                    `;
+                } else {
+                    let trackingActionBtn = '';
+                    if (item.receiveStatus === 'Borrowed') {
+                        trackingActionBtn = `<button class="action-table-btn" style="border-color: var(--success); color: var(--success);" onclick="markAsReturned(${trueIndex})">Mark Returned</button>`;
+                    } else if (item.receiveStatus === 'Need Repair') {
+                        trackingActionBtn = `<button class="action-table-btn" style="border-color: var(--success); color: var(--success);" onclick="markAsReturned(${trueIndex})">Fixed (Return Stock)</button>`;
+                    } else {
+                        trackingActionBtn = `
+                            <button class="action-table-btn" style="border-color: var(--pending); color: var(--pending);" onclick="borrowItem(${trueIndex}, 'Borrowed')">Borrow</button>
+                            <button class="action-table-btn" style="border-color: var(--repair); color: var(--repair);" onclick="borrowItem(${trueIndex}, 'Need Repair')">Log Repair</button>
+                        `;
+                    }
+
+                    tr.innerHTML = `
+                        <td data-label="Item Code" class="item-code-cell">${item.itemCode || '<em style="color:var(--danger)">EMPTY</em>'}</td>
+                        <td data-label="Item Name">${item.itemName || '<em style="color:var(--danger)">EMPTY</em>'}</td>
+                        <td data-label="Cupboard Location"><span style="color: var(--accent-hover); font-weight:500;">${itemCupboardText}</span></td>
+                        <td data-label="Stock Allocation">
+                            <div class="qty-badge-container">
+                                <div><strong>${item.qtyAvailable || 0}</strong> <span class="qty-sub-label">Available</span></div>
+                                <div><strong>${item.qtyBorrowed || 0}</strong> <span class="qty-sub-label">Active Log</span></div>
+                            </div>
+                        </td>
+                        <td data-label="Borrower Name">${item.borrowName || '-'}</td>
+                        <td data-label="Borrow Date">${item.borrowDate || '-'}</td>
+                        <td data-label="Status"><span class="badge ${statusClass}">${item.receiveStatus}</span></td>
+                        <td data-label="Receive Date">${receiveDateDisplay}</td>
+                        <td>
+                            <div class="actions-cell-wrapper">
+                                <button class="action-table-btn" onclick="enterInlineEditMode(${trueIndex})">Edit Row</button>
+                                ${trackingActionBtn}
+                                <button class="action-table-btn delete-btn" onclick="deleteRecord(${trueIndex})">Delete</button>
+                            </div>
+                        </td>
+                    `;
+                }
+                tbody.appendChild(tr);
+            });
+        }
+
+        function handleInlineStatusChange(index, value) {
+            const rDateInput = document.getElementById(`edit_rdate_${index}`);
+            if (value === 'Available') {
+                rDateInput.disabled = false;
+                if (!rDateInput.value) {
+                    rDateInput.value = new Date().toISOString().split('T')[0];
+                }
+            } else {
+                rDateInput.value = '';
+                rDateInput.disabled = true;
+            }
+        }
+
+        function enterInlineEditMode(index) {
+            editingRowIndex = index;
+            renderTable();
+        }
+
+        function cancelInlineRow() {
+            editingRowIndex = null;
+            renderTable();
+        }
+
+        function saveInlineRow(index) {
+            const itemCode = document.getElementById(`edit_code_${index}`).value.trim();
+            const itemName = document.getElementById(`edit_name_${index}`).value.trim();
+            const cupboard = document.getElementById(`edit_cupboard_${index}`).value;
+            const qtyAvailable = parseInt(document.getElementById(`edit_avail_${index}`).value, 10) || 0;
+            const qtyBorrowed = parseInt(document.getElementById(`edit_borrowed_${index}`).value, 10) || 0;
+            const borrowName = document.getElementById(`edit_bname_${index}`).value.trim();
+            const borrowDate = document.getElementById(`edit_bdate_${index}`).value;
+            const receiveStatus = document.getElementById(`edit_status_${index}`).value;
+            let receiveDate = document.getElementById(`edit_rdate_${index}`).value;
+
+            if (receiveStatus === 'Available' && !receiveDate) {
+                receiveDate = new Date().toISOString().split('T')[0];
+            }
+
+            inventoryData[currentLab][index] = {
+                itemCode, itemName, cupboard, qtyAvailable, qtyBorrowed,
+                borrowName, borrowDate, receiveStatus,
+                receiveDate: receiveStatus === 'Available' ? receiveDate : ''
+            };
+
+            editingRowIndex = null;
+            renderTable();
+            pushDatabaseToCloud();
+        }
+
+        function switchLab(labId) {
+            currentLab = labId;
+            editingRowIndex = null;
+            document.getElementById('current-lab-title').innerText = labNames[labId];
+            document.getElementById('searchInput').value = '';
+
+            const items = document.querySelectorAll('.lab-item');
+            items.forEach((item, idx) => {
+                if (parseInt(Object.keys(labNames)[idx], 10) === labId) {
+                    item.classList.add('active');
+                    item.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+                else item.classList.remove('active');
+            });
+
+            updateCupboardDropdowns();
+            renderTable();
+        }
+
+        function openModal() {
+            document.getElementById('inventoryForm').reset();
+            document.getElementById('excelFileInput').value = ''; 
+            document.getElementById('borrowDate').value = new Date().toISOString().split('T')[0];
+            
+            const activeFilter = document.getElementById('cupboardFilterSelect').value;
+            if (activeFilter !== 'ALL') {
+                document.getElementById('itemCupboard').value = activeFilter;
+            }
+            
+            toggleReceiveDate();
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        function openScannerModal() {
+            document.getElementById('manualQRFallbackInput').value = '';
+            document.getElementById('scannerModalOverlay').classList.add('active');
+            
+            html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", { 
+                fps: 15, 
+                qrbox: { width: 230, height: 230 },
+                rememberLastUsedCamera: true
+            });
+            
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        function closeScannerModal() {
+            document.getElementById('scannerModalOverlay').classList.remove('active');
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().then(() => {
+                    html5QrcodeScanner = null;
+                }).catch(err => console.error("Scanner exception error:", err));
+            }
+        }
+
+        function executeManualQRAction() {
+            const text = document.getElementById('manualQRFallbackInput').value;
+            if(text.trim()) {
+                onScanSuccess(text.trim());
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            closeScannerModal();
+            const normalizedText = decodedText.trim();
+            const list = cupboardSetup[currentLab] || [];
+            const matchedCupboard = list.find(c => c.toLowerCase() === normalizedText.toLowerCase());
+            
+            if (matchedCupboard) {
+                document.getElementById('cupboardFilterSelect').value = matchedCupboard;
+                document.getElementById('searchInput').value = '';
+                renderTable();
+                alert(`QR Found Location Mapping: Contents matching "${matchedCupboard}" layout parsed.`);
+            } else {
+                const searchField = document.getElementById('searchInput');
+                searchField.value = normalizedText;
+                renderTable();
+            }
+        }
+
+        function onScanFailure(error) {}
+
+        function toggleReceiveDate() {
+            const status = document.getElementById('receiveStatus').value;
+            const targetGroup = document.getElementById('receiveDateGroup');
+            const receiveDateInput = document.getElementById('receiveDate');
+            
+            targetGroup.style.display = 'none';
+            receiveDateInput.required = false;
+            receiveDateInput.value = '';
+        }
+
+        function handleSubmit(e) {
+            e.preventDefault();
+
+            let qtyAvailable = parseInt(document.getElementById('qtyAvailable').value, 10) || 0;
+            const qtyBorrowed = parseInt(document.getElementById('qtyBorrowed').value, 10) || 0;
+            const receiveStatus = document.getElementById('receiveStatus').value;
+
+            if (receiveStatus === 'Borrowed' || receiveStatus === 'Need Repair') {
+                qtyAvailable = Math.max(0, qtyAvailable - qtyBorrowed);
+            }
+
+            const newItem = {
+                itemCode: document.getElementById('itemCode').value.trim(),
+                itemName: document.getElementById('itemName').value.trim(),
+                cupboard: document.getElementById('itemCupboard').value,
+                qtyAvailable: qtyAvailable,
+                qtyBorrowed: qtyBorrowed,
+                borrowName: document.getElementById('borrowName').value.trim(),
+                borrowDate: document.getElementById('borrowDate').value,
+                receiveStatus: receiveStatus,
+                receiveDate: receiveStatus === 'Available' ? new Date().toISOString().split('T')[0] : ''
+            };
+
+            if(!inventoryData[currentLab]) inventoryData[currentLab] = [];
+            inventoryData[currentLab].push(newItem);
+            
+            renderTable();
+            closeModal();
+            pushDatabaseToCloud();
+        }
+
+        function handleBulkImport(inputElement) {
+            const file = inputElement.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                    
+                    if (rawRows.length === 0) return;
+
+                    const fallbackCupboard = document.getElementById('cupboardFilterSelect').value !== 'ALL' 
+                        ? document.getElementById('cupboardFilterSelect').value 
+                        : ((cupboardSetup[currentLab] && cupboardSetup[currentLab][0]) || "Cupboard 1");
+
+                    if(!inventoryData[currentLab]) inventoryData[currentLab] = [];
+
+                    rawRows.forEach(row => {
+                        const rowData = {};
+                        for (let key in row) {
+                            rowData[key.toLowerCase().replace(/[^a-z0-9]/g, '')] = row[key];
+                        }
+
+                        const itemCode = String(rowData['itemcode'] || rowData['code'] || '').trim();
+                        const itemName = String(rowData['itemname'] || rowData['name'] || '').trim();
+                        let assignedCupboard = String(rowData['cupboard'] || rowData['location'] || fallbackCupboard).trim();
+                        
+                        if(!cupboardSetup[currentLab]) cupboardSetup[currentLab] = ["Cupboard 1"];
+                        if (assignedCupboard && !cupboardSetup[currentLab].includes(assignedCupboard)) {
+                            cupboardSetup[currentLab].push(assignedCupboard);
+                        }
+
+                        let totalQty = parseInt(rowData['qty'] || rowData['quantity'] || rowData['count'] || rowData['total'], 10) || 0;
+                        let qtyBorrowed = parseInt(rowData['borrowedqty'] || rowData['borrowed'] || '0', 10) || 0;
+                        let rawStatus = String(rowData['status'] || rowData['receivestatus'] || '').trim().toLowerCase();
+                        let receiveStatus = 'Available';
+                        
+                        if (['repair', 'needrepair', 'broken'].includes(rawStatus)) {
+                            receiveStatus = 'Need Repair';
+                        } else if (['borrowed', 'issued'].includes(rawStatus)) {
+                            receiveStatus = 'Borrowed';
+                        }
+
+                        let qtyAvailable = totalQty;
+                        if (receiveStatus !== 'Available') {
+                            if(qtyBorrowed === 0) qtyBorrowed = 1;
+                            qtyAvailable = Math.max(0, qtyAvailable - qtyBorrowed);
+                        }
+
+                        const borrowName = rowData['borrowername'] || rowData['borrower'] || '';
+                        let borrowDate = rowData['borrowdate'] || new Date();
+                        if (borrowDate instanceof Date) borrowDate = borrowDate.toISOString().split('T')[0];
+
+                        inventoryData[currentLab].push({
+                            itemCode, itemName, cupboard: assignedCupboard, qtyAvailable, qtyBorrowed,
+                            borrowName: String(borrowName).trim(),
+                            borrowDate: String(borrowDate), receiveStatus,
+                            receiveDate: receiveStatus === 'Available' ? new Date().toISOString().split('T')[0] : ''
+                        });
+                    });
+
+                    updateCupboardDropdowns();
+                    renderTable();
+                    closeModal();
+                    pushDatabaseToCloud();
+                } catch (error) {
+                    console.error(error);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function borrowItem(index, targetedMode) {
+            const row = inventoryData[currentLab][index];
+            if (row.qtyAvailable <= 0) return;
+
+            const promptLabel = targetedMode === 'Need Repair' ? 'Enter Damage Status Reasons:' : `Enter Borrower Name Configuration Identity context for "${row.itemName}":`;
+            const borrowName = prompt(promptLabel);
+            if (!borrowName || borrowName.trim() === "") return;
+
+            const maxQty = row.qtyAvailable;
+            const qtyStr = prompt(`Enter transaction tracking count target metric amount (Max Available: ${maxQty}):`, "1");
+            if (qtyStr === null) return; 
+            
+            const qtyToBorrow = parseInt(qtyStr, 10);
+            if (isNaN(qtyToBorrow) || qtyToBorrow <= 0 || qtyToBorrow > maxQty) return;
+
+            row.qtyAvailable -= qtyToBorrow;
+            row.qtyBorrowed = (row.qtyBorrowed || 0) + qtyToBorrow;
+            row.borrowName = borrowName.trim();
+            row.borrowDate = new Date().toISOString().split('T')[0];
+            row.receiveStatus = targetedMode;
+            row.receiveDate = ''; 
+
+            renderTable();
+            pushDatabaseToCloud();
+        }
+
+        function markAsReturned(index) {
+            const row = inventoryData[currentLab][index];
+            row.receiveStatus = 'Available';
+            row.receiveDate = new Date().toISOString().split('T')[0];
+            row.qtyAvailable = (row.qtyAvailable || 0) + (row.qtyBorrowed || 0);
+            row.qtyBorrowed = 0; 
+
+            renderTable();
+            pushDatabaseToCloud();
+        }
+
+        function deleteRecord(index) {
+            if(confirm("Permanently wipe historical asset row from tracking ledger arrays?")) {
+                inventoryData[currentLab].splice(index, 1);
+                editingRowIndex = null;
+                renderTable();
+                pushDatabaseToCloud();
+            }
+        }
+
+        function clearAllLabRecords() {
+            const currentLabName = labNames[currentLab];
+            if ((inventoryData[currentLab] || []).length === 0) return;
+            
+            if (confirm(`WARNING: Completely drop data logs and matrices structural content metrics for "${currentLabName}"?`)) {
+                inventoryData[currentLab] = [];
+                editingRowIndex = null;
+                renderTable();
+                pushDatabaseToCloud();
+            }
+        }
+
+        window.addEventListener('resize', () => { renderTable(); });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchDatabaseFromCloud();
+            // Automatically poll changes from Google Sheets every 25 seconds for multi-device passive updates
+            setInterval(fetchDatabaseFromCloud, 25000);
+        });
+    </script>
+</body>
+</html>
