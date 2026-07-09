@@ -262,7 +262,7 @@
         @media (min-width: 992px) {
             .header-actions {
                 width: auto;
-                max-width: 850px;
+                max-width: 950px;
             }
         }
 
@@ -331,6 +331,18 @@
         .btn-scan:hover {
             background: var(--glass-bg-hover);
             border-color: var(--accent-color);
+        }
+
+        .btn-excel {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+
+        .btn-excel:hover {
+            background: var(--success-bg);
+            border-color: var(--success);
+            color: white;
         }
 
         .btn-danger {
@@ -860,6 +872,10 @@
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                         Scan QR
                     </button>
+                    <button class="btn btn-excel" onclick="exportToExcel()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        Export Current View
+                    </button>
                     <button class="btn btn-danger" onclick="clearAllLabRecords()">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                         Clear All
@@ -978,7 +994,7 @@
                 <button class="close-btn" onclick="closeScannerModal()">&times;</button>
             </div>
             <div style="margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-                Align the tracking tags or asset codes inside the viewfinder.
+                Align the tracking tags or asset codes inside the viewfinder. Scanning a registered cupboard name matches it directly.
             </div>
             
             <div id="qr-reader"></div>
@@ -1082,7 +1098,7 @@
 
                 const res = await fetch(CLOUD_SYNC_URL, {
                     method: "POST",
-                    mode: "no-cors", // Google App Web Apps receive redirects via cross-origin posts safely with no-cors
+                    mode: "no-cors", 
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(dataPayload)
                 });
@@ -1182,6 +1198,9 @@
             const formSelect = document.getElementById('itemCupboard');
             const list = cupboardSetup[currentLab] || [];
             
+            // Retain selection values if possible
+            const previousFilterVal = filterSelect.value || "ALL";
+
             filterSelect.innerHTML = '<option value="ALL">-- Show All Cupboards --</option>';
             list.forEach(cup => {
                 filterSelect.innerHTML += `<option value="${cup}">${cup}</option>`;
@@ -1191,6 +1210,10 @@
             list.forEach(cup => {
                 formSelect.innerHTML += `<option value="${cup}">${cup}</option>`;
             });
+
+            if([...filterSelect.options].some(o => o.value === previousFilterVal)) {
+                filterSelect.value = previousFilterVal;
+            }
         }
 
         function handleCupboardFilterChange() {
@@ -1233,6 +1256,7 @@
                 cupboardSetup[currentLab] = cupboardSetup[currentLab].filter(c => c !== activeSelection);
                 
                 updateCupboardDropdowns();
+                document.getElementById('cupboardFilterSelect').value = "ALL";
                 renderTable();
                 pushDatabaseToCloud();
             }
@@ -1410,6 +1434,7 @@
             editingRowIndex = null;
             document.getElementById('current-lab-title').innerText = labNames[labId];
             document.getElementById('searchInput').value = '';
+            document.getElementById('cupboardFilterSelect').value = 'ALL';
 
             const items = document.querySelectorAll('.lab-item');
             items.forEach((item, idx) => {
@@ -1475,14 +1500,18 @@
             closeScannerModal();
             const normalizedText = decodedText.trim();
             const list = cupboardSetup[currentLab] || [];
+            
+            // Check if string matches an active cupboard context label strictly
             const matchedCupboard = list.find(c => c.toLowerCase() === normalizedText.toLowerCase());
             
             if (matchedCupboard) {
+                // Instantly update layout constraints exclusively for the matched cupboard context node
                 document.getElementById('cupboardFilterSelect').value = matchedCupboard;
                 document.getElementById('searchInput').value = '';
                 renderTable();
-                alert(`QR Found Location Mapping: Contents matching "${matchedCupboard}" layout parsed.`);
+                alert(`QR Match Found! Showing location view for: "${matchedCupboard}"`);
             } else {
+                // Fallback to text item-level filtering search queries
                 const searchField = document.getElementById('searchInput');
                 searchField.value = normalizedText;
                 renderTable();
@@ -1664,6 +1693,48 @@
                 renderTable();
                 pushDatabaseToCloud();
             }
+        }
+
+        // Generate and download a tailored spreadsheet view depending on parameters 
+        function exportToExcel() {
+            const currentLabName = labNames[currentLab] || `Lab_${currentLab}`;
+            const activeCupboardFilter = document.getElementById('cupboardFilterSelect').value;
+            let items = inventoryData[currentLab] || [];
+
+            // Apply targeted filter criteria matching the UI logic context
+            if (activeCupboardFilter !== 'ALL') {
+                items = items.filter(item => (item.cupboard || "Cupboard 1") === activeCupboardFilter);
+            }
+
+            if (items.length === 0) {
+                alert("There are no tool data listings within this scope to map to an Excel sheet document.");
+                return;
+            }
+
+            // Map data items into neat worksheet data structures
+            const processedRows = items.map(item => ({
+                "Item Code": item.itemCode,
+                "Item Name Reference": item.itemName,
+                "Cupboard Location": item.cupboard || 'Cupboard 1',
+                "Available In Stock": item.qtyAvailable || 0,
+                "Active Out Qty": item.qtyBorrowed || 0,
+                "Total Registered Count": (item.qtyAvailable || 0) + (item.qtyBorrowed || 0),
+                "Borrower / Allocation Note": item.borrowName || '-',
+                "Date Logged": item.borrowDate || '-',
+                "Transaction Status": item.receiveStatus || 'Available',
+                "Receive Date Log": item.receiveDate || '-'
+            }));
+
+            // Create workbook workspace
+            const worksheet = XLSX.utils.json_to_sheet(processedRows);
+            const workbook = XLSX.utils.book_new();
+            
+            // Format dynamic file naming strings seamlessly
+            let fileScopeString = activeCupboardFilter === 'ALL' ? "All_Cupboards" : activeCupboardFilter.replace(/[^a-zA-Z0-9]/g, "_");
+            const compiledFilename = `${currentLabName.replace(/[^a-zA-Z0-9]/g, "_")}_[${fileScopeString}].xlsx`;
+
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Data Log");
+            XLSX.writeFile(workbook, compiledFilename);
         }
 
         window.addEventListener('resize', () => { renderTable(); });
